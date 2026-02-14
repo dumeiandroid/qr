@@ -20,8 +20,7 @@
         const APP_CONFIG = {
             "api": {
                 "baseUrl": "https://lidan-co-id.pages.dev/api/contacts_filter_dinamis6",
-                "uploadUrl": "https://lidan.co.id/api/upload_r2_lidan",
-                "assetDomain": "https://assets.lidan.co.id/",
+                "uploadUrl": "https://lidan.co.id/api/upload_r2_lidan", // API Upload
                 "authKey": "admin",
                 "tableName": "tanda_tangan"
             },
@@ -145,7 +144,6 @@
             headRow.innerHTML = html;
         }
 
-        // MODIFIKASI: Membangun Form dengan Input File khusus untuk Lampiran
         function buildFormFields() {
             const container = document.getElementById('form-fields-container');
             let html = '';
@@ -156,11 +154,10 @@
                     html += `<input type="hidden" name="${col.key}" id="field_${col.key}">`;
                 } 
                 else if(col.type === 'file') {
-                    // Input khusus untuk Lampiran (x_08)
                     html += `<div class="${gridSpan} flex flex-col space-y-1">
                                 <label class="text-[9px] font-black uppercase text-gray-400 tracking-widest">${col.label}</label>
                                 <div class="flex gap-2">
-                                    <input type="text" name="${col.key}" id="field_${col.key}" placeholder="URL File" class="flex-1 bg-indigo-50 p-4 border rounded-xl outline-none text-[10px] text-indigo-700 font-bold" readonly>
+                                    <input type="text" name="${col.key}" id="field_${col.key}" placeholder="URL File Lampiran" class="flex-1 bg-indigo-50 p-4 border rounded-xl outline-none text-[10px] text-indigo-700 font-bold" readonly>
                                     <label class="bg-indigo-600 text-white px-4 py-4 rounded-xl font-bold text-[10px] cursor-pointer hover:bg-indigo-700">
                                         UPLOAD
                                         <input type="file" class="hidden" onchange="handleFileUpload(this, 'field_${col.key}')">
@@ -183,7 +180,7 @@
             container.innerHTML = html;
         }
 
-        // FUNGSI BARU: Menangani Upload ke R2 Lidan
+        // FUNGSI UPLOAD: Menyesuaikan dengan upload_r2_lidan.js
         async function handleFileUpload(input, targetFieldId) {
             const file = input.files[0];
             if (!file) return;
@@ -191,15 +188,15 @@
             const statusEl = document.getElementById(`upload-status-${targetFieldId.replace('field_', '')}`);
             const btnSubmit = document.getElementById('btn-submit-form');
             
-            // Buat Nama File Unik: NamaAsli_Timestamp_Random.ext
+            // Generate Nama File Unik untuk parameter 'customName'
             const timestamp = Date.now();
             const randomStr = Math.random().toString(36).substring(7);
             const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-            const uniqueFileName = `${timestamp}_${randomStr}_${cleanName}`;
+            const uniquePath = `dokumen/${timestamp}_${randomStr}_${cleanName}`;
 
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('path', 'dokumen/' + uniqueFileName);
+            formData.append('customName', uniquePath);
 
             try {
                 statusEl.innerText = "MENGUNGGAH...";
@@ -209,20 +206,21 @@
 
                 const response = await fetch(APP_CONFIG.api.uploadUrl, {
                     method: 'POST',
+                    headers: { 'X-Custom-Auth': APP_CONFIG.api.authKey },
                     body: formData
                 });
 
-                const resText = await response.text(); // API biasanya kembalikan text status
+                const result = await response.json();
                 
-                // Construct URL Manual karena kita tahu domain dan folder-nya
-                const finalUrl = `${APP_CONFIG.api.assetDomain}dokumen/${uniqueFileName}`;
-                
-                document.getElementById(targetFieldId).value = finalUrl;
-                statusEl.innerText = "BERHASIL DIUNGGAH";
-                statusEl.className = "text-[8px] font-bold uppercase mt-1 text-green-500";
+                if (result.success) {
+                    document.getElementById(targetFieldId).value = result.url;
+                    statusEl.innerText = "BERHASIL DIUNGGAH";
+                    statusEl.className = "text-[8px] font-bold uppercase mt-1 text-green-500";
+                } else {
+                    throw new Error(result.error);
+                }
             } catch (error) {
-                console.error(error);
-                statusEl.innerText = "GAGAL UPLOAD";
+                statusEl.innerText = "GAGAL: " + error.message;
                 statusEl.className = "text-[8px] font-bold uppercase mt-1 text-red-500";
             } finally {
                 btnSubmit.disabled = false;
@@ -230,7 +228,6 @@
             }
         }
 
-        // --- FUNGSI SISANYA (Login, LoadData, Render, dll tetap sama) ---
         async function login() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
@@ -301,15 +298,11 @@
             document.getElementById('dynamic-form').reset();
             document.getElementById('edit_id_x').value = "";
             document.getElementById('modal-title').innerText = "Registrasi Surat Baru";
-            
-            // Reset status upload
             const statusEl = document.getElementById('upload-status-x_08');
             if(statusEl) statusEl.innerText = "";
-
             if(document.getElementById('field_x_05')) document.getElementById('field_x_05').value = generateNoSurat();
             if(document.getElementById('field_x_07')) document.getElementById('field_x_07').value = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
             if(document.getElementById('field_x_10')) document.getElementById('field_x_10').value = 'LIDAN-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-            
             document.getElementById('modal-form').classList.remove('hidden');
         }
 
@@ -319,10 +312,8 @@
             if(!item) return;
             document.getElementById('modal-title').innerText = "Update Data Surat";
             document.getElementById('edit_id_x').value = item.id_x;
-            
             const statusEl = document.getElementById('upload-status-x_08');
             if(statusEl) statusEl.innerText = item.x_08 ? "FILE TERSEDIA" : "";
-
             APP_CONFIG.tableColumns.forEach(col => {
                 const el = document.getElementById(`field_${col.key}`);
                 if(el) el.value = item[col.key] || "";
